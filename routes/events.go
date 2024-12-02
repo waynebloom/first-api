@@ -8,53 +8,50 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func getEvent(context *gin.Context) {
-	id, err := strconv.ParseInt(context.Param("id"), 10, 64)
+func getEvent(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"message": "Path parameter 'id' has an invalid value."})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Path parameter 'id' has an invalid value."})
 		return
 	}
 
 	event, err := model.GetEvent(id)
 	if err != nil {
-		context.JSON(http.StatusInternalServerError, gin.H{"message": "An unspecified error occurred."})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "No event exists with that id."})
 		return
 	}
 
-	context.JSON(http.StatusOK, event)
+	c.JSON(http.StatusOK, event)
 }
 
-func getEvents(context *gin.Context) {
+func getEvents(c *gin.Context) {
 	events, err := model.GetAllEvents()
 
 	if err != nil {
-		context.JSON(http.StatusInternalServerError, gin.H{"message": "An unspecified error occurred."})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "An unspecified error occurred."})
 		return
 	}
-	context.JSON(http.StatusOK, events)
+	c.JSON(http.StatusOK, events)
 }
 
-func postEvent(context *gin.Context) {
+func postEvent(c *gin.Context) {
 	var event model.Event
-	err := context.ShouldBindJSON(&event)
+	err := c.ShouldBindJSON(&event)
 
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"message": "Could not parse request data"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Could not parse request data"})
 		return
 	}
 
-	event.ID = 1
-	event.UserID = 1
-
+	event.UserID = c.GetInt64("userId")
 	err = event.Save()
-
 	if err != nil {
-		context.JSON(http.StatusInternalServerError, gin.H{"message": "An unspecified error occurred."})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "An unspecified error occurred."})
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "the event was successfully created", "event": event})
+	c.JSON(http.StatusCreated, gin.H{"message": "the event was successfully created", "event": event})
 }
 
 func putEvent(c *gin.Context) {
@@ -65,30 +62,36 @@ func putEvent(c *gin.Context) {
 		return
 	}
 
-  _, err = model.GetEvent(id)
+	userId := c.GetInt64("userId")
+	event, err := model.GetEvent(id)
 
-  if err != nil {
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "An unspecified error occurred."})
-    return
-  }
+		return
+	}
 
-  var updatedEvent model.Event
-  err = c.ShouldBindJSON(&updatedEvent)
+	if event.UserID != userId {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "You are attempting to modify an event you do not own."})
+		return
+	}
+
+	var updatedEvent model.Event
+	err = c.ShouldBindJSON(&updatedEvent)
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Request body is malformed."})
 		return
 	}
 
-  updatedEvent.ID = id
-  err = updatedEvent.Update()
+	updatedEvent.ID = id
+	err = updatedEvent.Update()
 
-  if err != nil {
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Request body is malformed."})
-    return
-  }
+		return
+	}
 
-  c.JSON(http.StatusOK, gin.H{"message": "Event updated successfully."})
+	c.JSON(http.StatusOK, gin.H{"message": "Event updated successfully."})
 }
 
 func deleteEvent(c *gin.Context) {
@@ -99,19 +102,25 @@ func deleteEvent(c *gin.Context) {
 		return
 	}
 
-  event, err := model.GetEvent(id)
+	userId := c.GetInt64("userId")
+	event, err := model.GetEvent(id)
 
-  if err != nil {
+	if event.UserID != userId {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "You are attempting to delete an event you do not own."})
+		return
+	}
+
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "An unspecified error occurred."})
-    return
-  }
+		return
+	}
 
-  err = event.Delete()
+	err = event.Delete()
 
-  if err != nil {
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "An unspecified error occurred."})
-    return
-  }
+		return
+	}
 
-  c.JSON(http.StatusOK, gin.H{"message": "Event deleted successfully."})
+	c.JSON(http.StatusOK, gin.H{"message": "Event deleted successfully."})
 }

@@ -11,10 +11,10 @@ type Event struct {
 	Description string    `binding:"required"`
 	Location    string    `binding:"required"`
 	DateTime    time.Time `binding:"required"`
-	UserID      int
+	UserID      int64
 }
 
-func (event Event) Save() error {
+func (event *Event) Save() error {
 	query := `
   INSERT INTO events(name, description, location, dateTime, user_id)
   VALUES (?, ?, ?, ?, ?)`
@@ -55,7 +55,7 @@ func GetAllEvents() ([]Event, error) {
 	var events []Event
 	for rows.Next() {
 		var event Event
-    err := rows.Scan(
+		err := rows.Scan(
 			&event.ID,
 			&event.Name,
 			&event.Description,
@@ -64,11 +64,11 @@ func GetAllEvents() ([]Event, error) {
 			&event.UserID,
 		)
 
-    if err != nil {
-      return nil, err
-    }
+		if err != nil {
+			return nil, err
+		}
 
-    events = append(events, event)
+		events = append(events, event)
 	}
 
 	return events, nil
@@ -122,14 +122,53 @@ func (event Event) Update() error {
 }
 
 func (event Event) Delete() error {
-  query := "DELETE FROM events WHERE id = ?"
-  stmt, err := db.DB.Prepare(query)
+	query := "DELETE FROM events WHERE id = ?"
+	stmt, err := db.DB.Prepare(query)
 
-  if err != nil {
-    return err
-  }
-  defer stmt.Close()
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
 
-  _, err = stmt.Exec(event.ID)
-  return err
+	_, err = stmt.Exec(event.ID)
+	return err
+}
+
+func (event Event) Register(userId int64) error {
+	query := "INSERT INTO registrations(event_id, user_id) VALUES (?, ?)"
+	stmt, err := db.DB.Prepare(query)
+
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(event.ID, userId)
+	return err
+}
+
+func (event Event) Deregister(userId int64) error {
+	query := "DELETE FROM registrations WHERE event_id = ? AND user_id = ?"
+	stmt, err := db.DB.Prepare(query)
+
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(event.ID, userId)
+	return err
+}
+
+func (event Event) GetRoster() error {
+	query := "SELECT * FROM registrations WHERE event_id = ?"
+	stmt, err := db.DB.Prepare(query)
+
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(event.ID)
+	return err
 }
